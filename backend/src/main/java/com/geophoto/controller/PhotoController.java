@@ -15,6 +15,10 @@ import org.springframework.lang.NonNull;
 
 import java.util.List;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+
 /**
  * Photo Controller
  * REST API endpoints for photo management
@@ -32,7 +36,23 @@ public class PhotoController {
      */
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return (User) authentication.getPrincipal();
+        return (User) authentication.getPrincipal(); // Assuming User implements Principal or is the principal object
+    }
+    
+    /**
+     * GET /api/photos/image/{filename}
+     * Serve photo image from GridFS
+     */
+    @GetMapping("/image/{filename}")
+    public ResponseEntity<Resource> servePhoto(@PathVariable String filename) {
+        Resource file = photoService.getPhotoResource(filename);
+        if (file == null || !file.exists()) {
+             return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getFilename() + "\"")
+                .contentType(MediaType.IMAGE_JPEG) // We could try to detect type, but JPEG is safe default or we can store content type in DB
+                .body(file);
     }
     
     /**

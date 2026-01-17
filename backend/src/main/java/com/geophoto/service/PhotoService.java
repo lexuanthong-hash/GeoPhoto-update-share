@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 public class PhotoService {
     
     private final PhotoRepository photoRepository;
+    private final org.springframework.data.mongodb.gridfs.GridFsTemplate gridFsTemplate;
     
     @Value("${app.upload.dir}")
     private String uploadDir;
@@ -92,7 +93,7 @@ public class PhotoService {
     
     /**
      * Upload and process photo
-     * Saves file to local uploads directory and extracts GPS metadata
+     * Saves file to GridFS and extracts GPS metadata
      * 
      * @param file MultipartFile uploaded from client
      * @param description Optional description for the photo
@@ -110,33 +111,37 @@ public class PhotoService {
         log.info("Starting upload process for file: {}", originalFilename);
         
         try {
-            // Create uploads directory if it doesn't exist
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-                log.info("Created upload directory: {}", uploadPath.toAbsolutePath());
-            }
-            
             // Generate unique filename to avoid conflicts
             String fileExtension = getFileExtension(originalFilename);
             String uniqueFilename = UUID.randomUUID().toString() + fileExtension;
-            Path filePath = uploadPath.resolve(uniqueFilename);
             
-            // Save file to disk
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-            log.info("File saved to: {}", filePath.toAbsolutePath());
+            // Store file in GridFS
+            // We need to read input stream twice: once for GPS, once for GridFS.
+            // Since we can't always reset MultipartFile stream reliably if it's not disk-backed, 
+            // and we want to avoid memory issues with large files, we can:
+            // 1. Store in GridFS first.
+            // 2. Read from GridFS to extract GPS.
+            
+            org.bson.types.ObjectId gridFsFileId = gridFsTemplate.store(
+                    file.getInputStream(), 
+                    uniqueFilename, 
+                    file.getContentType(),
+                    new com.mongodb.BasicDBObject("userId", user.getId())
+            );
+            
+            log.info("File saved to GridFS with ID: {}", gridFsFileId);
             
             // Create Photo document
             Photo photo = new Photo();
             photo.setFileName(originalFilename);
-            photo.setUrl("/uploads/" + uniqueFilename);
+            // URL format: /api/photos/image/{uniqueFilename}
+            photo.setUrl("/api/photos/image/" + uniqueFilename);
             photo.setDescription(description);
             photo.setUserId(user.getId());
             
-            // Extract GPS coordinates using ImageMetadataReader
-            File imageFile = filePath.toFile();
-            try {
-                GeoLocation geoLocation = GpsExtractor.extractGpsCoordinates(imageFile);
+            // Extract GPS coordinates from GridFS stream
+            try (java.io.InputStream gridFsStream = gridFsTemplate.getResource(uniqueFilename).getInputStream()) {
+                GeoLocation geoLocation = GpsExtractor.extractGpsCoordinates(gridFsStream, originalFilename);
                 
                 if (geoLocation != null) {
                     photo.setLatitude(geoLocation.getLatitude());
@@ -145,12 +150,13 @@ public class PhotoService {
                             geoLocation.getLatitude(), geoLocation.getLongitude());
                 } else {
                     log.warn("No GPS coordinates found in image: {}", originalFilename);
-                    // Leave latitude and longitude as null
                 }
                 
-                // Extract date taken
-                LocalDateTime dateTaken = GpsExtractor.extractDateTaken(imageFile);
-                photo.setTakenAt(dateTaken);
+                // Re-open stream for date extraction (since previous read consumed it)
+                try (java.io.InputStream dateStream = gridFsTemplate.getResource(uniqueFilename).getInputStream()) {
+                     LocalDateTime dateTaken = GpsExtractor.extractDateTaken(dateStream, originalFilename);
+                     photo.setTakenAt(dateTaken);
+                }
                 
             } catch (ImageProcessingException | IOException e) {
                 log.error("Error extracting metadata from image: {}", originalFilename, e);
@@ -168,11 +174,18 @@ public class PhotoService {
             return convertToDTO(savedPhoto);
             
         } catch (IOException e) {
-            log.error("Error uploading file: {}", originalFilename, e);
-            throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+             log.error("Error uploading file: {}", originalFilename, e);
+             throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * Get file resource from GridFS
+     */
+    public org.springframework.core.io.Resource getPhotoResource(String filename) {
+        return gridFsTemplate.getResource(filename);
+    }
+
     /**
      * Get file extension from filename
      */
@@ -188,27 +201,31 @@ public class PhotoService {
     }
     
     /**
-     * Delete photo from database and file system
+     * Delete photo from database and GridFS
      */
     public void deletePhoto(@NonNull String id) {
         Photo photo = photoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Photo not found with id: " + id));
         
-        // Delete physical file
-        try {
-            String url = photo.getUrl();
-            if (url != null && url.startsWith("/uploads/")) {
+        // Delete from GridFS
+        String url = photo.getUrl();
+        if (url != null && url.startsWith("/api/photos/image/")) {
+            String filename = url.substring("/api/photos/image/".length());
+            gridFsTemplate.delete(new org.springframework.data.mongodb.core.query.Query(
+                    org.springframework.data.mongodb.core.query.Criteria.where("filename").is(filename)));
+            log.info("Deleted file from GridFS: {}", filename);
+        } else if (url != null && url.startsWith("/uploads/")) {
+             // Legacy deletion for local files (best effort)
+             try {
                 String filename = url.substring("/uploads/".length());
                 Path filePath = Paths.get(uploadDir).resolve(filename);
-                
                 if (Files.exists(filePath)) {
                     Files.delete(filePath);
-                    log.info("Deleted file from disk: {}", filePath.toAbsolutePath());
+                    log.info("Deleted legacy file from disk: {}", filePath.toAbsolutePath());
                 }
-            }
-        } catch (IOException e) {
-            log.error("Error deleting file for photo id: {}", id, e);
-            // Continue with database deletion even if file deletion fails
+             } catch (Exception e) {
+                 log.warn("Failed to delete legacy file: {}", url);
+             }
         }
         
         // Delete from database

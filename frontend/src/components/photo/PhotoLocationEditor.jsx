@@ -99,22 +99,22 @@ const PhotoLocationEditor = ({ photo, onClose, onLocationUpdated }) => {
   const handleSave = async () => {
     try {
       setSaving(true)
-      
+
       // Ensure latitude and longitude are valid numbers
       const lat = parseFloat(latitude)
       const lon = parseFloat(longitude)
-      
+
       if (isNaN(lat) || isNaN(lon)) {
         alert('❌ Tọa độ không hợp lệ. Vui lòng kiểm tra lại.')
         setSaving(false)
         return
       }
-      
+
       console.log(`Updating photo ${photo.id} location to: ${lat}, ${lon}`)
-      
+
       // Use photoService which includes JWT token
       const updatedPhoto = await updatePhotoLocation(photo.id, lat, lon)
-      
+
       console.log('Location updated successfully:', updatedPhoto)
       onLocationUpdated(updatedPhoto)
       alert('✅ Đã cập nhật vị trí thành công!')
@@ -129,6 +129,27 @@ const PhotoLocationEditor = ({ photo, onClose, onLocationUpdated }) => {
   const handleLocationChange = (lat, lng) => {
     setLatitude(lat)
     setLongitude(lng)
+  }
+
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Trình duyệt không hỗ trợ Geolocation')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        setLatitude(latitude)
+        setLongitude(longitude)
+      },
+      (error) => {
+        console.error('Error getting location:', error)
+        alert('Không thể lấy vị trí hiện tại. Vui lòng kiểm tra quyền truy cập vị trí.')
+      },
+      { enableHighAccuracy: true }
+    )
   }
 
   // Create draggable marker icon
@@ -242,6 +263,19 @@ const PhotoLocationEditor = ({ photo, onClose, onLocationUpdated }) => {
                   />
                 </div>
               </div>
+
+
+              {/* Get Current Location Button */}
+              <button
+                onClick={handleGetCurrentLocation}
+                className="w-full mt-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Lấy vị trí hiện tại
+              </button>
 
               {/* Instructions */}
               <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-gray-700">

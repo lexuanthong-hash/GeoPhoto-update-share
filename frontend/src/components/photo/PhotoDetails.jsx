@@ -62,7 +62,7 @@ const PhotoDetails = ({ photo, onClose, onPhotoUpdated, onPhotoDeleted, onEditLo
   const handleDelete = async () => {
     try {
       setDeleting(true)
-      
+
       // Use photoService which includes JWT token
       await deletePhoto(photo.id)
 
@@ -114,7 +114,11 @@ const PhotoDetails = ({ photo, onClose, onPhotoUpdated, onPhotoDeleted, onEditLo
             {/* Left Column - Image */}
             <div>
               <img
+<<<<<<< HEAD:frontend/src/components/photo/PhotoDetails.jsx
                 src={`http://${window.location.hostname}:8080${photo.url}`}
+=======
+                src={photo.url}
+>>>>>>> upstream/main:frontend/src/components/PhotoDetails.jsx
                 alt={photo.fileName}
                 className="w-full rounded-lg shadow-lg object-cover"
                 style={{ maxHeight: '500px' }}
@@ -122,11 +126,15 @@ const PhotoDetails = ({ photo, onClose, onPhotoUpdated, onPhotoDeleted, onEditLo
                   e.target.src = 'https://via.placeholder.com/600x400?text=Image+Not+Found'
                 }}
               />
-              
+
               {/* Image Actions */}
               <div className="mt-4 flex gap-2">
                 <a
+<<<<<<< HEAD:frontend/src/components/photo/PhotoDetails.jsx
                   href={`http://${window.location.hostname}:8080${photo.url}`}
+=======
+                  href={photo.url}
+>>>>>>> upstream/main:frontend/src/components/PhotoDetails.jsx
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-center text-sm font-medium"
@@ -134,7 +142,11 @@ const PhotoDetails = ({ photo, onClose, onPhotoUpdated, onPhotoDeleted, onEditLo
                   🔍 Xem Full Size
                 </a>
                 <a
+<<<<<<< HEAD:frontend/src/components/photo/PhotoDetails.jsx
                   href={`http://${window.location.hostname}:8080${photo.url}`}
+=======
+                  href={photo.url}
+>>>>>>> upstream/main:frontend/src/components/PhotoDetails.jsx
                   download={photo.fileName}
                   className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-center text-sm font-medium"
                 >

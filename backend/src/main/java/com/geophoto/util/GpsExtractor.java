@@ -27,6 +27,19 @@ public class GpsExtractor {
      */
     public static GeoLocation extractGpsCoordinates(File imageFile) throws ImageProcessingException, IOException {
         Metadata metadata = ImageMetadataReader.readMetadata(imageFile);
+        return extractGpsFromMetadata(metadata, imageFile.getName());
+    }
+
+    /**
+     * Extract GPS coordinates from input stream
+     * @return GeoLocation object containing latitude and longitude, or null if not available
+     */
+    public static GeoLocation extractGpsCoordinates(java.io.InputStream inputStream, String filename) throws ImageProcessingException, IOException {
+        Metadata metadata = ImageMetadataReader.readMetadata(inputStream);
+        return extractGpsFromMetadata(metadata, filename);
+    }
+
+    private static GeoLocation extractGpsFromMetadata(Metadata metadata, String filename) {
         GpsDirectory gpsDirectory = metadata.getFirstDirectoryOfType(GpsDirectory.class);
         
         if (gpsDirectory != null && gpsDirectory.getGeoLocation() != null) {
@@ -35,7 +48,7 @@ public class GpsExtractor {
             return location;
         }
         
-        log.warn("No GPS coordinates found in image: {}", imageFile.getName());
+        log.warn("No GPS coordinates found in image: {}", filename);
         return null;
     }
     
@@ -45,6 +58,19 @@ public class GpsExtractor {
      */
     public static LocalDateTime extractDateTaken(File imageFile) throws ImageProcessingException, IOException {
         Metadata metadata = ImageMetadataReader.readMetadata(imageFile);
+        return extractDateTakenFromMetadata(metadata, imageFile.getName());
+    }
+
+    /**
+     * Extract date/time when photo was taken from input stream
+     * @return LocalDateTime object or null if not available
+     */
+    public static LocalDateTime extractDateTaken(java.io.InputStream inputStream, String filename) throws ImageProcessingException, IOException {
+        Metadata metadata = ImageMetadataReader.readMetadata(inputStream);
+        return extractDateTakenFromMetadata(metadata, filename);
+    }
+
+    private static LocalDateTime extractDateTakenFromMetadata(Metadata metadata, String filename) {
         ExifSubIFDDirectory directory = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
         
         if (directory != null) {
@@ -58,7 +84,7 @@ public class GpsExtractor {
             }
         }
         
-        log.warn("No date taken found in image: {}", imageFile.getName());
+        log.warn("No date taken found in image: {}", filename);
         return null;
     }
 }
